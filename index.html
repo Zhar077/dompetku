@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<meta name="description" content="Catatan keuangan pribadi yang tersimpan di Google Sheet milikmu.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DompetKu">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>DompetKu</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --card: #ffffff; --text: #111827; --muted: #6b7280; --line: #e5e7eb;
+    --brand: #0f766e; --head: #0f766e; --on-brand: #ffffff; --in: #059669; --out: #dc2626; --tf: #2563eb;
+    --warn: #d97706; --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1114; --card: #151d22; --text: #e5e7eb; --muted: #9ca3af; --line: #26323a;
+      --brand: #2dd4bf; --head: #0f3d39; --on-brand: #0b1114; --in: #34d399; --out: #f87171; --tf: #60a5fa; --warn: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); overscroll-behavior-y: contain; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--head); color: #fff;
+    padding: 12px 16px 10px; padding-top: calc(12px + env(safe-area-inset-top)); }
+  .toprow { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+  #status { background: rgba(255,255,255,.15); border: 0; color: #fff; border-radius: 99px; padding: 4px 10px;
+    font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; }
+  .monthnav { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .monthnav button { background: rgba(255,255,255,.15); color: #fff; border: 0; width: 36px; height: 32px;
+    border-radius: 8px; font-size: 18px; }
+  .monthnav span { font-weight: 600; }
+  main { padding: 14px 16px; max-width: 640px; margin: 0 auto; }
+  .card { background: var(--card); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--line); }
+  .card h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+  .in { color: var(--in); } .out { color: var(--out); } .tf { color: var(--tf); } .warn { color: var(--warn); }
+  .check { display: flex; align-items: center; gap: 10px; margin: 12px 0 2px; font-size: 14px; color: var(--text); font-weight: 600; cursor: pointer; }
+  .check input { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--brand); }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .subtle { background: var(--bg); border-radius: 10px; padding: 2px 12px 12px; margin-top: 6px; }
+  #settingsBtn { background: rgba(255,255,255,.15); border: 0; color: #fff; border-radius: 99px; width: 30px; height: 26px; font-size: 14px; }
+  #settingsBtn.active { background: rgba(255,255,255,.35); }
+  details summary { list-style: none; } details summary::-webkit-details-marker { display: none; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .grid3 div { min-width: 0; }
+  .grid3 .num { font-size: 14px; display: block; overflow: hidden; text-overflow: ellipsis; }
+  .tx { cursor: pointer; }
+  .tx .left { min-width: 0; }
+  .tx .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx .sub { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .daylabel { font-size: 12.5px; color: var(--muted); font-weight: 600; margin: 14px 4px 6px; }
+  .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 6px; }
+  .bar i { display: block; height: 100%; background: var(--brand); border-radius: 99px; }
+  .bar i.warn { background: var(--warn); } .bar i.over { background: var(--out); }
+  .empty { text-align: center; color: var(--muted); padding: 28px 8px; }
+  .notice { background: var(--card); border: 1px solid var(--warn); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; font-size: 14px; }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line);
+    display: flex; padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
+  nav button { flex: 1; background: none; border: 0; color: var(--muted); padding: 10px 0 12px; font-size: 12px; font-weight: 600; font-family: inherit; }
+  nav button .ic { display: block; font-size: 20px; line-height: 1.2; }
+  nav button.active { color: var(--brand); }
+  nav .add { flex: 0 0 76px; }
+  nav .add span { display: inline-flex; width: 52px; height: 52px; margin-top: -22px; border-radius: 50%;
+    background: var(--brand); color: var(--on-brand); font-size: 30px; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20; display: none; }
+  .overlay.show { display: block; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; background: var(--card);
+    border-radius: 18px 18px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    max-height: 92vh; overflow-y: auto; transform: translateY(105%); transition: transform .22s ease; max-width: 640px; margin: 0 auto; }
+  .sheet.show { transform: none; }
+  .sheet h3 { margin: 0 0 12px; font-size: 17px; }
+  .seg { display: flex; background: var(--bg); border-radius: 10px; padding: 3px; margin-bottom: 12px; }
+  .seg button { flex: 1; border: 0; background: none; padding: 9px 4px; border-radius: 8px; font: inherit; font-weight: 600; color: var(--muted); font-size: 14px; }
+  .seg button.on[data-j="Pengeluaran"] { background: var(--out); color: #fff; }
+  .seg button.on[data-j="Pemasukan"] { background: var(--in); color: #fff; }
+  .seg button.on[data-j="Transfer"] { background: var(--tf); color: #fff; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
+  input, select { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 11px 12px; min-width: 0; }
+  input:focus, select:focus { outline: 2px solid var(--brand); border-color: transparent; }
+  .amount { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  .btn { flex: 1; border: 0; border-radius: 12px; padding: 13px; font: inherit; font-weight: 700; cursor: pointer; }
+  .btn.primary { background: var(--brand); color: var(--on-brand); }
+  .btn.ghost { background: var(--bg); color: var(--text); border: 1px solid var(--line); }
+  .btn.danger { background: none; color: var(--out); flex: 0 0 auto; padding: 13px 10px; }
+  .btn:disabled { opacity: .6; }
+  .stack > * + * { margin-top: 10px; }
+  .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: #111827; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 30;
+    opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; }
+  #updateBar { position: fixed; top: calc(8px + env(safe-area-inset-top)); left: 12px; right: 12px; z-index: 40; display: none;
+    background: #111827; color: #fff; border-radius: 12px; padding: 10px 12px; align-items: center; gap: 10px; font-size: 14px; }
+  #updateBar.show { display: flex; }
+  #updateBar button { margin-left: auto; background: #2dd4bf; color: #0b1114; border: 0; border-radius: 8px; padding: 8px 12px; font: inherit; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="updateBar"><span>Versi baru tersedia.</span><button id="updateBtn">Muat ulang</button></div>
+
+<header>
+  <div class="toprow">
+    <h1>DompetKu</h1>
+    <div style="display:flex;gap:6px;align-items:center;min-width:0">
+      <button id="status" aria-label="Status sinkron">…</button>
+      <button id="settingsBtn" aria-label="Setelan">⚙️</button>
+    </div>
+  </div>
+  <div class="monthnav" id="monthnav">
+    <button id="prevM" aria-label="Bulan sebelumnya">‹</button>
+    <span id="monthLabel">…</span>
+    <button id="nextM" aria-label="Bulan berikutnya">›</button>
+  </div>
+</header>
+
+<main>
+  <section id="view-home"></section>
+  <section id="view-history" hidden></section>
+  <section id="view-loans" hidden></section>
+  <section id="view-report" hidden></section>
+  <section id="view-settings" hidden>
+    <div class="card stack">
+      <h2>Koneksi ke Google Sheet</h2>
+      <div>
+        <label for="s-url">URL Apps Script (berakhiran /exec)</label>
+        <input id="s-url" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false">
+      </div>
+      <div>
+        <label for="s-key">API key</label>
+        <input id="s-key" type="password" placeholder="tempel API key" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="btn primary" id="s-save" style="width:100%">Simpan &amp; tes koneksi</button>
+      <p class="muted" style="margin:0">URL dan API key hanya disimpan di HP ini.</p>
+    </div>
+    <div class="card stack">
+      <h2>Sinkronisasi</h2>
+      <div id="s-info" class="muted"></div>
+      <button class="btn ghost" id="s-sync" style="width:100%">Sinkron sekarang</button>
+      <a class="btn ghost" id="s-sheet" style="display:block;text-align:center;text-decoration:none;width:100%" target="_blank" rel="noopener" hidden>Buka Google Sheet</a>
+    </div>
+    <div class="card stack">
+      <h2>Lainnya</h2>
+      <button class="btn ghost" id="s-reset" style="width:100%;color:var(--out)">Hapus data di HP ini</button>
+      <p class="muted" style="margin:0">Data di Google Sheet tidak ikut terhapus. Transaksi yang belum sinkron akan hilang.</p>
+      <p class="muted" style="margin:0" id="s-version"></p>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-view="home" class="active"><span class="ic">🏠</span>Beranda</button>
+  <button data-view="history"><span class="ic">📜</span>Riwayat</button>
+  <button class="add" id="addBtn" aria-label="Tambah transaksi"><span>+</span></button>
+  <button data-view="loans"><span class="ic">🤝</span>Pinjaman</button>
+  <button data-view="report"><span class="ic">📊</span>Laporan</button>
+</nav>
+
+<div class="overlay" id="overlay"></div>
+<form class="sheet" id="form" autocomplete="off">
+  <h3 id="formTitle">Tambah transaksi</h3>
+  <div class="seg" id="seg">
+    <button type="button" data-j="Pengeluaran" class="on">Pengeluaran</button>
+    <button type="button" data-j="Pemasukan">Pemasukan</button>
+    <button type="button" data-j="Transfer">Transfer</button>
+  </div>
+  <label for="f-jumlah">Jumlah (Rp)</label>
+  <input id="f-jumlah" class="amount money" inputmode="numeric" placeholder="0">
+  <div id="wrap-kategori">
+    <label for="f-kategori">Kategori</label>
+    <select id="f-kategori"></select>
+  </div>
+  <div class="two">
+    <div>
+      <label for="f-akun" id="lbl-akun">Akun</label>
+      <select id="f-akun"></select>
+    </div>
+    <div id="wrap-tujuan" hidden>
+      <label for="f-tujuan">Ke akun</label>
+      <select id="f-tujuan"></select>
+    </div>
+    <div id="wrap-tanggal">
+      <label for="f-tanggal">Tanggal</label>
+      <input id="f-tanggal" type="date">
+    </div>
+  </div>
+  <div id="wrap-tanggal2" hidden></div>
+  <label for="f-catatan">Catatan (opsional)</label>
+  <input id="f-catatan" maxlength="200" placeholder="mis. makan siang">
+  <div class="actions">
+    <button type="button" class="btn danger" id="delBtn" hidden>Hapus</button>
+    <button type="button" class="btn ghost" data-close>Batal</button>
+    <button type="submit" class="btn primary" id="saveBtn">Simpan</button>
+  </div>
+</form>
+
+<!-- Form pinjaman -->
+<form class="sheet" id="loanForm" autocomplete="off">
+  <h3 id="loanFormTitle">Tambah pinjaman</h3>
+  <div class="seg" id="lseg">
+    <button type="button" data-lj="Utang" class="on">Aku berutang</button>
+    <button type="button" data-lj="Piutang">Aku meminjamkan</button>
+  </div>
+  <label for="l-nama">Nama pinjaman / pihak</label>
+  <input id="l-nama" maxlength="100">
+  <label for="l-pokok">Pokok pinjaman (Rp)</label>
+  <input id="l-pokok" class="amount money" inputmode="numeric" placeholder="0">
+  <div class="two">
+    <div><label for="l-tanggal">Tanggal mulai</label><input id="l-tanggal" type="date"></div>
+    <div><label for="l-akun" id="lbl-l-akun">Akun</label><select id="l-akun"></select></div>
+  </div>
+  <label class="check"><input type="checkbox" id="l-cair" checked><span id="lbl-l-cair">Tambahkan ke saldo akun</span></label>
+  <div class="hint">Matikan untuk pinjaman lama yang uangnya sudah tercatat / sudah terpakai sebelum memakai app.</div>
+  <label for="l-awal" id="lbl-l-awal">Sudah dibayar sebelumnya (opsional)</label>
+  <input id="l-awal" class="money" inputmode="numeric" placeholder="0">
+
+  <label class="check"><input type="checkbox" id="l-cicil"><span>Cicilan tetap tiap bulan</span></label>
+  <div class="subtle" id="wrap-cicil" hidden>
+    <div class="two">
+      <div><label for="l-cicilan">Cicilan / bulan (Rp)</label><input id="l-cicilan" class="money" inputmode="numeric" placeholder="0"></div>
+      <div><label for="l-tempo">Jatuh tempo tgl</label><input id="l-tempo" type="number" inputmode="numeric" min="1" max="31" placeholder="1–31"></div>
+    </div>
+    <div class="hint">Cicilan = total yang dibayar per bulan (pokok + bunga).</div>
+  </div>
+
+  <label class="check"><input type="checkbox" id="l-bunga"><span>Ada bunga</span></label>
+  <div class="subtle" id="wrap-bunga" hidden>
+    <label for="l-bungaBln">Bunga per bulan (Rp, perkiraan)</label>
+    <input id="l-bungaBln" class="money" inputmode="numeric" placeholder="0">
+    <div class="hint">Dipakai sebagai isian awal saat mencatat pembayaran; bisa diubah tiap kali bayar.</div>
+  </div>
+
+  <label for="l-catatan">Catatan (opsional)</label>
+  <input id="l-catatan" maxlength="200" placeholder="mis. tenor 12 bulan, bunga 1%/bln">
+  <div class="actions">
+    <button type="button" class="btn danger" id="l-del" hidden>Hapus</button>
+    <button type="button" class="btn ghost" data-close>Batal</button>
+    <button type="submit" class="btn primary">Simpan</button>
+  </div>
+</form>
+
+<!-- Form pembayaran pinjaman -->
+<form class="sheet" id="payForm" autocomplete="off">
+  <h3 id="payTitle" style="margin-bottom:2px">Pembayaran</h3>
+  <div class="muted" id="paySub" style="margin-bottom:6px"></div>
+  <label for="p-pokok">Pokok (Rp)</label>
+  <input id="p-pokok" class="amount money" inputmode="numeric" placeholder="0">
+  <div class="hint" style="display:flex;justify-content:space-between;gap:8px"><span id="p-sisa"></span>
+    <a href="#" id="p-lunas" style="color:var(--brand);font-weight:600" onclick="return false">Lunasi semua</a></div>
+  <div id="wrap-p-bunga">
+    <label for="p-bunga">Bunga (Rp)</label>
+    <input id="p-bunga" class="money" inputmode="numeric" placeholder="0">
+  </div>
+  <div class="row" style="border:0;padding-top:12px"><span class="muted">Total</span><span class="num" id="p-total">Rp 0</span></div>
+  <div class="two">
+    <div><label for="p-akun" id="lbl-p-akun">Akun</label><select id="p-akun"></select></div>
+    <div><label for="p-tanggal">Tanggal</label><input id="p-tanggal" type="date"></div>
+  </div>
+  <label for="p-catatan">Catatan (opsional)</label>
+  <input id="p-catatan" maxlength="200" placeholder="mis. cicilan ke-3">
+  <div class="actions">
+    <button type="button" class="btn danger" id="p-del" hidden>Hapus</button>
+    <button type="button" class="btn ghost" data-close>Batal</button>
+    <button type="submit" class="btn primary">Simpan</button>
+  </div>
+</form>
+
+<!-- Detail pinjaman -->
+<div class="sheet" id="loanDetail"><div id="loanDetailBody"></div></div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
