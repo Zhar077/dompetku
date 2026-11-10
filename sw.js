@@ -1,6 +1,6 @@
 /* Service worker DompetKu: simpan file app di HP supaya bisa dibuka offline.
  * Setiap kali file app diubah, NAIKKAN angka versi di bawah supaya HP mengunduh versi baru. */
-const VERSION = 'dompetku-v2.1.0';
+const VERSION = 'dompetku-v2.2.0';
 const ASSETS = [
   './',
   './index.html',

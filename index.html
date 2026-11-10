@@ -50,6 +50,9 @@
   .in { color: var(--in); } .out { color: var(--out); } .tf { color: var(--tf); } .warn { color: var(--warn); }
   .check { display: flex; align-items: center; gap: 10px; margin: 12px 0 2px; font-size: 14px; color: var(--text); font-weight: 600; cursor: pointer; }
   .check input { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--brand); }
+  .need { outline: 2px solid var(--warn) !important; border-color: transparent !important; }
+  .scanbox { background: var(--bg); border: 1px dashed var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin-bottom: 12px; }
+  .scanbox.ok { border-color: var(--in); }
   .hint { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
   .subtle { background: var(--bg); border-radius: 10px; padding: 2px 12px 12px; margin-top: 6px; }
   #settingsBtn { background: rgba(255,255,255,.15); border: 0; color: #fff; border-radius: 99px; width: 30px; height: 26px; font-size: 14px; }
@@ -176,7 +179,12 @@
 
 <div class="overlay" id="overlay"></div>
 <form class="sheet" id="form" autocomplete="off">
-  <h3 id="formTitle">Tambah transaksi</h3>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
+    <h3 id="formTitle" style="margin:0">Tambah transaksi</h3>
+    <button type="button" class="btn ghost" id="scanBtn" style="flex:0 0 auto;padding:9px 12px;font-size:14px">📷 Scan nota</button>
+  </div>
+  <input type="file" id="scanFile" accept="image/*" hidden>
+  <div class="scanbox" id="scanInfo" hidden></div>
   <div class="seg" id="seg">
     <button type="button" data-j="Pengeluaran" class="on">Pengeluaran</button>
     <button type="button" data-j="Pemasukan">Pemasukan</button>

@@ -1,7 +1,7 @@
 /* DompetKu PWA — offline-first, sinkron ke Google Sheet lewat Apps Script API. */
 'use strict';
 
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 const STORAGE_KEY = 'dompetku.state.v1';
 const SYNC_INTERVAL_MS = 60 * 1000;
 const J_CAIR = 'Pencairan Pinjaman';
@@ -236,10 +236,10 @@ function pendingIds() {
  * API & sinkronisasi
  * ===================================================================== */
 
-async function api(body, cfg) {
+async function api(body, cfg, timeoutMs) {
   cfg = cfg || S;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 45000);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs || 45000);
   let res;
   try {
     res = await fetch(cfg.url, {
@@ -645,9 +645,103 @@ function openForm(t) {
   $('f-tanggal').value = t ? t.tanggal : defaultDate();
   $('f-catatan').value = t ? t.catatan : '';
   setJenis(t ? t.jenis : 'Pengeluaran');
+  $('scanBtn').hidden = !!t;
+  $('scanInfo').hidden = true;
+  clearNeeds();
   showSheet('form');
-  if (!t) setTimeout(() => $('f-jumlah').focus(), 250);
 }
+
+/* =====================================================================
+ * Scan nota (foto → Gemini lewat Apps Script → isi form)
+ * ===================================================================== */
+
+const NEED_FIELDS = ['f-jumlah', 'f-kategori', 'f-akun', 'f-tanggal'];
+function clearNeeds() { NEED_FIELDS.forEach(id => $(id).classList.remove('need')); }
+NEED_FIELDS.forEach(id => ['input', 'change'].forEach(ev => $(id).addEventListener(ev, () => $(id).classList.remove('need'))));
+
+/** Kecilkan foto ke maks 1280px (JPEG) supaya cepat dikirim & hemat kuota. */
+function shrinkImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const max = 1280;
+      const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * scale);
+      c.height = Math.round(img.naturalHeight * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Foto tidak bisa dibuka.')); };
+    img.src = url;
+  });
+}
+
+function selectWithBlank(sel, placeholder) {
+  if (!sel.querySelector('option[value=""]')) {
+    const o = document.createElement('option');
+    o.value = ''; o.textContent = placeholder;
+    sel.insertBefore(o, sel.firstChild);
+  }
+  sel.value = '';
+}
+
+function applyScan(r) {
+  setJenis(r.jenis || 'Pengeluaran');
+  const missing = [];
+  if (r.total) setMoney($('f-jumlah'), r.total); else { $('f-jumlah').value = ''; missing.push('f-jumlah'); }
+  if (r.tanggal) $('f-tanggal').value = r.tanggal; else missing.push('f-tanggal');
+  if (r.kategori) $('f-kategori').value = r.kategori; else { selectWithBlank($('f-kategori'), '— pilih kategori —'); missing.push('f-kategori'); }
+  if (r.akun) $('f-akun').value = r.akun; else { selectWithBlank($('f-akun'), '— pilih akun —'); missing.push('f-akun'); }
+  const note = r.catatan || r.toko;
+  if (note) $('f-catatan').value = note.slice(0, 200);
+  clearNeeds();
+  missing.forEach(id => $(id).classList.add('need'));
+
+  const names = { 'f-jumlah': 'jumlah', 'f-tanggal': 'tanggal', 'f-kategori': 'kategori', 'f-akun': 'akun' };
+  const box = $('scanInfo');
+  box.classList.toggle('ok', !missing.length && r.keyakinan === 'tinggi');
+  box.innerHTML = (r.toko ? `<b>${esc(r.toko)}</b> · ` : '')
+    + (missing.length
+      ? `Lengkapi yang ditandai kuning: <b>${missing.map(id => names[id]).join(', ')}</b>.`
+      : 'Semua kolom terisi.')
+    + (r.keyakinan === 'rendah' ? ' <span class="warn">AI kurang yakin — cek angkanya.</span>' : ' Cek lagi sebelum simpan.');
+  box.hidden = false;
+  const first = missing[0];
+  if (first) setTimeout(() => $(first).focus(), 100);
+}
+
+$('scanBtn').onclick = () => {
+  if (!S.url || !S.key) { toast('Hubungkan ke Google Sheet dulu di Setelan.'); return; }
+  if (!navigator.onLine) { toast('Scan nota butuh internet. Isi manual dulu ya.'); return; }
+  $('scanFile').value = '';
+  $('scanFile').click();
+};
+
+$('scanFile').onchange = async () => {
+  const file = $('scanFile').files[0];
+  if (!file) return;
+  const btn = $('scanBtn');
+  btn.disabled = true; btn.textContent = '⏳ Membaca…';
+  $('scanInfo').hidden = false; $('scanInfo').classList.remove('ok');
+  $('scanInfo').textContent = 'Membaca nota dengan AI… (biasanya 5–20 detik, bisa lebih lama kalau server sibuk)';
+  try {
+    const image = await shrinkImage(file);
+    const res = await api({ action: 'scanNota', image, mime: 'image/jpeg' }, null, 150000);
+    if (!$('form').classList.contains('show') || editing) return; // form sudah ditutup
+    if (res.scan.bukanNota) {
+      $('scanInfo').innerHTML = '<span class="warn">Foto ini tidak terlihat seperti nota.</span> Coba foto ulang atau isi manual.';
+      return;
+    }
+    applyScan(res.scan);
+  } catch (e) {
+    $('scanInfo').innerHTML = `<span class="out">Gagal membaca nota:</span> ${esc(e.message)}`;
+  } finally {
+    btn.disabled = false; btn.textContent = '📷 Scan nota';
+  }
+};
 
 $('addBtn').onclick = () => openForm(null);
 document.querySelectorAll('#seg button').forEach(b => { b.onclick = () => setJenis(b.dataset.j); });
@@ -659,6 +753,7 @@ $('form').onsubmit = e => {
   const tanggal = $('f-tanggal').value;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) { toast('Isi tanggal'); return; }
   const akun = $('f-akun').value;
+  if (!akun) { toast('Pilih akun'); return; }
   const akunTujuan = jenis === 'Transfer' ? $('f-tujuan').value : '';
   if (jenis === 'Transfer' && akun === akunTujuan) { toast('Akun asal dan tujuan tidak boleh sama'); return; }
   const kategori = jenis === 'Transfer' ? 'Transfer' : $('f-kategori').value;
