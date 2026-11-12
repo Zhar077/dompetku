@@ -1,7 +1,7 @@
 /* DompetKu PWA — offline-first, sinkron ke Google Sheet lewat Apps Script API. */
 'use strict';
 
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 const STORAGE_KEY = 'dompetku.state.v1';
 const SYNC_INTERVAL_MS = 60 * 1000;
 const J_CAIR = 'Pencairan Pinjaman';
@@ -33,6 +33,13 @@ let detailLoanId = null;
 let jenis = 'Pengeluaran';
 let loanJenis = 'Utang';
 let syncing = false;
+let hideSaldo = true;    // saldo selalu tersembunyi setiap app dibuka
+
+/** Tampilkan saldo, atau samarkan bila disembunyikan. */
+function rpH(n) { return hideSaldo ? 'Rp ••••••' : rp(n); }
+function eyeBtn() {
+  return `<button type="button" class="eye" data-eye aria-label="${hideSaldo ? 'Tampilkan saldo' : 'Sembunyikan saldo'}">${hideSaldo ? '👁️ Lihat' : '🙈 Tutup'}</button>`;
+}
 
 function loadState() {
   try {
@@ -108,6 +115,12 @@ function toast(msg) {
 
 /** Perubahan saldo akun akibat satu transaksi (sama dengan txDeltas_ di Code.gs). */
 function txDeltas(t) {
+  const d = txDeltasBase(t);
+  if (t.biaya > 0) d.push([t.akun, -t.biaya]); // biaya admin dipotong dari akun asal
+  return d;
+}
+
+function txDeltasBase(t) {
   const j = t.jumlah, total = t.jumlah + (t.bunga || 0);
   const utang = t.kategori === 'Utang';
   switch (t.jenis) {
@@ -179,6 +192,7 @@ function compute(m) {
       if (t.kategori === 'Utang') addExp('Bunga Pinjaman', t.bunga);
       else pemasukan += t.bunga;
     }
+    if (t.biaya > 0) addExp('Biaya Admin', t.biaya);
   });
   const byCategory = Object.keys(perKategori).map(nama => {
     const cat = S.categories.find(c => c.nama === nama);
@@ -354,6 +368,7 @@ function txRow(t, pending) {
     const inc = t.jenis === 'Pemasukan';
     title = t.kategori; sub = t.akun; cls = inc ? 'in' : 'out'; sign = inc ? '+' : '−';
   }
+  if (t.biaya > 0) sub += ' · admin ' + rp(t.biaya);
   return `<div class="row tx" data-id="${esc(t.id)}">
     <div class="left"><div class="title">${pending.has(t.id) ? '⏳ ' : ''}${esc(title)}</div>
     <div class="sub">${esc(sub)}${t.catatan ? ' · ' + esc(t.catatan) : ''}</div></div>
@@ -372,7 +387,7 @@ function renderHome(d) {
   const s = d.summary;
   const pending = pendingIds();
   const accRows = d.accounts.map(a => `<div class="row"><span>${esc(a.nama)}</span>
-    <span class="num ${a.saldo < 0 ? 'out' : ''}">${rp(a.saldo)}</span></div>`).join('') || '<div class="muted">Belum ada akun.</div>';
+    <span class="num ${a.saldo < 0 && !hideSaldo ? 'out' : ''}">${rpH(a.saldo)}</span></div>`).join('') || '<div class="muted">Belum ada akun.</div>';
   const recent = d.transactions.slice(0, 6).map(t => txRow(t, pending)).join('')
     || '<div class="empty">Belum ada transaksi bulan ini.<br>Ketuk + untuk mulai mencatat.</div>';
 
@@ -393,8 +408,10 @@ function renderHome(d) {
   }
 
   $('view-home').innerHTML = `${setupNotice()}
-    <div class="card"><h2>Total saldo</h2><div class="big">${rp(d.totalSaldo)}</div>
-      ${(d.utang || d.piutang) ? `<div class="muted">Kekayaan bersih (saldo + piutang − utang): <b>${rp(d.netWorth)}</b></div>` : ''}</div>
+    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 style="margin:0">Total saldo</h2>${eyeBtn()}</div>
+      <div class="big" style="margin-top:6px">${rpH(d.totalSaldo)}</div>
+      ${(d.utang || d.piutang) ? `<div class="muted">Kekayaan bersih (saldo + piutang − utang): <b>${rpH(d.netWorth)}</b></div>` : ''}</div>
     <div class="card"><h2>${monthName(month)}</h2>
       <div class="grid3">
         <div><div class="muted">Masuk</div><span class="num in">${rp(s.pemasukan)}</span></div>
@@ -457,7 +474,7 @@ function renderLoans(d) {
       <div class="grid3">
         <div><div class="muted">Sisa utang</div><span class="num out">${rp(d.utang)}</span></div>
         <div><div class="muted">Sisa piutang</div><span class="num in">${rp(d.piutang)}</span></div>
-        <div><div class="muted">Kekayaan bersih</div><span class="num ${d.netWorth < 0 ? 'out' : ''}">${rp(d.netWorth)}</span></div>
+        <div><div class="muted">Kekayaan bersih ${eyeBtn()}</div><span class="num ${d.netWorth < 0 && !hideSaldo ? 'out' : ''}">${rpH(d.netWorth)}</span></div>
       </div></div>
     <button class="btn primary" id="newLoanBtn" style="width:100%;margin-bottom:4px">+ Tambah pinjaman</button>
     ${body || '<div class="card empty">Belum ada pinjaman.<br>Catat utang (kamu meminjam) atau piutang (kamu meminjamkan).</div>'}`;
@@ -517,6 +534,7 @@ $('prevM').onclick = () => { month = shiftMonth(month, -1); render(); };
 $('nextM').onclick = () => { month = shiftMonth(month, 1); render(); };
 $('status').onclick = () => sync(true);
 document.querySelector('main').addEventListener('click', e => {
+  if (e.target.closest('[data-eye]')) { hideSaldo = !hideSaldo; render(); return; }
   const lr = e.target.closest('.loanrow');
   if (lr) { openLoanDetail(lr.dataset.loan); return; }
   const el = e.target.closest('.tx'); if (!el) return;
@@ -642,10 +660,11 @@ function openForm(t) {
   fillSelect($('f-tujuan'), accs, t && t.akunTujuan);
   if (!t && accs.length > 1) $('f-tujuan').value = accs[1];
   setMoney($('f-jumlah'), t ? t.jumlah : 0);
+  showFee('f', t ? t.biaya : 0);
   $('f-tanggal').value = t ? t.tanggal : defaultDate();
   $('f-catatan').value = t ? t.catatan : '';
   setJenis(t ? t.jenis : 'Pengeluaran');
-  $('scanBtn').hidden = !!t;
+  $('scanRow').hidden = !!t;
   $('scanInfo').hidden = true;
   clearNeeds();
   showSheet('form');
@@ -695,6 +714,7 @@ function applyScan(r) {
   if (r.tanggal) $('f-tanggal').value = r.tanggal; else missing.push('f-tanggal');
   if (r.kategori) $('f-kategori').value = r.kategori; else { selectWithBlank($('f-kategori'), '— pilih kategori —'); missing.push('f-kategori'); }
   if (r.akun) $('f-akun').value = r.akun; else { selectWithBlank($('f-akun'), '— pilih akun —'); missing.push('f-akun'); }
+  if (r.biaya > 0) showFee('f', r.biaya);
   const note = r.catatan || r.toko;
   if (note) $('f-catatan').value = note.slice(0, 200);
   clearNeeds();
@@ -713,18 +733,37 @@ function applyScan(r) {
   if (first) setTimeout(() => $(first).focus(), 100);
 }
 
-$('scanBtn').onclick = () => {
+/* Biaya admin (opsional) — prefix 'f' = form transaksi, 'p' = form pembayaran pinjaman */
+function showFee(prefix, n) {
+  const open = n > 0;
+  $(prefix + '-feeLink').hidden = open;
+  $(prefix + '-feeWrap').hidden = !open;
+  setMoney($(prefix + '-biaya'), n || 0);
+}
+function feeValue(prefix) { return $(prefix + '-feeWrap').hidden ? 0 : money($(prefix + '-biaya')); }
+['f', 'p'].forEach(px => {
+  $(px + '-feeLink').onclick = () => { showFee(px, 0); $(px + '-feeWrap').hidden = false; $(px + '-feeLink').hidden = true; $(px + '-biaya').focus(); };
+  $(px + '-feeDel').onclick = () => { showFee(px, 0); if (px === 'p') updatePayTotal(); };
+});
+
+/* Scan: tombol Kamera (langsung buka kamera) & Galeri (pilih foto) */
+function startScan(inputId) {
   if (!S.url || !S.key) { toast('Hubungkan ke Google Sheet dulu di Setelan.'); return; }
   if (!navigator.onLine) { toast('Scan nota butuh internet. Isi manual dulu ya.'); return; }
-  $('scanFile').value = '';
-  $('scanFile').click();
-};
+  $(inputId).value = '';
+  $(inputId).click();
+}
+$('scanCamBtn').onclick = () => startScan('scanFileCam');
+$('scanBtn').onclick = () => startScan('scanFile');
 
-$('scanFile').onchange = async () => {
-  const file = $('scanFile').files[0];
+$('scanFileCam').onchange = () => handleScanFile($('scanFileCam').files[0]);
+$('scanFile').onchange = () => handleScanFile($('scanFile').files[0]);
+
+async function handleScanFile(file) {
   if (!file) return;
-  const btn = $('scanBtn');
-  btn.disabled = true; btn.textContent = '⏳ Membaca…';
+  const btns = [$('scanCamBtn'), $('scanBtn')];
+  btns.forEach(b => { b.disabled = true; });
+  $('scanCamBtn').textContent = '⏳ Membaca…';
   $('scanInfo').hidden = false; $('scanInfo').classList.remove('ok');
   $('scanInfo').textContent = 'Membaca nota dengan AI… (biasanya 5–20 detik, bisa lebih lama kalau server sibuk)';
   try {
@@ -739,9 +778,10 @@ $('scanFile').onchange = async () => {
   } catch (e) {
     $('scanInfo').innerHTML = `<span class="out">Gagal membaca nota:</span> ${esc(e.message)}`;
   } finally {
-    btn.disabled = false; btn.textContent = '📷 Scan nota';
+    btns.forEach(b => { b.disabled = false; });
+    $('scanCamBtn').textContent = '📷 Kamera';
   }
-};
+}
 
 $('addBtn').onclick = () => openForm(null);
 document.querySelectorAll('#seg button').forEach(b => { b.onclick = () => setJenis(b.dataset.j); });
@@ -764,7 +804,7 @@ $('form').onsubmit = e => {
     tanggal, jenis, kategori, akun, jumlah, akunTujuan,
     catatan: $('f-catatan').value.trim().slice(0, 200),
     dibuatPada: editing ? editing.dibuatPada : nowStr(),
-    pinjamanId: '', bunga: 0,
+    pinjamanId: '', bunga: 0, biaya: feeValue('f'),
   };
   closeSheets();
   month = tanggal.slice(0, 7);
@@ -943,10 +983,10 @@ $('l-del').onclick = () => {
  * ===================================================================== */
 
 function updatePayTotal() {
-  const total = money($('p-pokok')) + ($('wrap-p-bunga').hidden ? 0 : money($('p-bunga')));
+  const total = money($('p-pokok')) + ($('wrap-p-bunga').hidden ? 0 : money($('p-bunga'))) + feeValue('p');
   $('p-total').textContent = rp(total);
 }
-['p-pokok', 'p-bunga'].forEach(id => $(id).addEventListener('input', updatePayTotal));
+['p-pokok', 'p-bunga', 'p-biaya'].forEach(id => $(id).addEventListener('input', updatePayTotal));
 
 function openPayForm(l, p) {
   if (!ensureData()) return;
@@ -969,6 +1009,7 @@ function openPayForm(l, p) {
   }
   setMoney($('p-pokok'), pokok);
   setMoney($('p-bunga'), bunga);
+  showFee('p', p ? p.biaya : 0);
   fillSelect($('p-akun'), accountNames(), p ? p.akun : l.akun);
   $('p-tanggal').value = p ? p.tanggal : todayStr();
   $('p-catatan').value = p ? p.catatan : '';
@@ -998,7 +1039,7 @@ $('payForm').onsubmit = e => {
     tanggal, jenis: J_BAYAR, kategori: l.jenis, akun: $('p-akun').value, jumlah: pokok, akunTujuan: '',
     catatan: $('p-catatan').value.trim().slice(0, 200),
     dibuatPada: editingPay ? editingPay.dibuatPada : nowStr(),
-    pinjamanId: l.id, bunga,
+    pinjamanId: l.id, bunga, biaya: feeValue('p'),
   };
   const id = l.id;
   const lunasSekarang = pokok === sisa;

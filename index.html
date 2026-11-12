@@ -50,6 +50,8 @@
   .in { color: var(--in); } .out { color: var(--out); } .tf { color: var(--tf); } .warn { color: var(--warn); }
   .check { display: flex; align-items: center; gap: 10px; margin: 12px 0 2px; font-size: 14px; color: var(--text); font-weight: 600; cursor: pointer; }
   .check input { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--brand); }
+  .linkbtn { background: none; border: 0; padding: 0; margin-top: 8px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--brand); cursor: pointer; }
+  .eye { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 99px; padding: 3px 10px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .need { outline: 2px solid var(--warn) !important; border-color: transparent !important; }
   .scanbox { background: var(--bg); border: 1px dashed var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin-bottom: 12px; }
   .scanbox.ok { border-color: var(--in); }
@@ -179,10 +181,15 @@
 
 <div class="overlay" id="overlay"></div>
 <form class="sheet" id="form" autocomplete="off">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
-    <h3 id="formTitle" style="margin:0">Tambah transaksi</h3>
-    <button type="button" class="btn ghost" id="scanBtn" style="flex:0 0 auto;padding:9px 12px;font-size:14px">📷 Scan nota</button>
+  <h3 id="formTitle">Tambah transaksi</h3>
+  <div id="scanRow" style="margin-bottom:12px">
+    <div class="muted" style="margin-bottom:6px">Scan nota dengan AI (opsional)</div>
+    <div style="display:flex;gap:8px">
+      <button type="button" class="btn ghost" id="scanCamBtn" style="padding:10px;font-size:14px">📷 Kamera</button>
+      <button type="button" class="btn ghost" id="scanBtn" style="padding:10px;font-size:14px">🖼️ Galeri</button>
+    </div>
   </div>
+  <input type="file" id="scanFileCam" accept="image/*" capture="environment" hidden>
   <input type="file" id="scanFile" accept="image/*" hidden>
   <div class="scanbox" id="scanInfo" hidden></div>
   <div class="seg" id="seg">
@@ -192,6 +199,12 @@
   </div>
   <label for="f-jumlah">Jumlah (Rp)</label>
   <input id="f-jumlah" class="amount money" inputmode="numeric" placeholder="0">
+  <button type="button" class="linkbtn" id="f-feeLink">+ Biaya admin</button>
+  <div id="f-feeWrap" hidden>
+    <label for="f-biaya">Biaya admin (Rp) <button type="button" class="linkbtn" id="f-feeDel" style="margin:0 0 0 6px;color:var(--out)">hapus</button></label>
+    <input id="f-biaya" class="money" inputmode="numeric" placeholder="0">
+    <div class="hint">Dipotong dari akun asal & dicatat sebagai pengeluaran "Biaya Admin".</div>
+  </div>
   <div id="wrap-kategori">
     <label for="f-kategori">Kategori</label>
     <select id="f-kategori"></select>
@@ -276,6 +289,11 @@
   <div id="wrap-p-bunga">
     <label for="p-bunga">Bunga (Rp)</label>
     <input id="p-bunga" class="money" inputmode="numeric" placeholder="0">
+  </div>
+  <button type="button" class="linkbtn" id="p-feeLink">+ Biaya admin</button>
+  <div id="p-feeWrap" hidden>
+    <label for="p-biaya">Biaya admin (Rp) <button type="button" class="linkbtn" id="p-feeDel" style="margin:0 0 0 6px;color:var(--out)">hapus</button></label>
+    <input id="p-biaya" class="money" inputmode="numeric" placeholder="0">
   </div>
   <div class="row" style="border:0;padding-top:12px"><span class="muted">Total</span><span class="num" id="p-total">Rp 0</span></div>
   <div class="two">
